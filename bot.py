@@ -157,7 +157,7 @@ def handle_all_messages(message):
         
         print(f"Получено сообщение от @{username} (ID: {message.from_user.id}): {text}")
         
-        if username in ["sh0ck85", "ttaeart"] and text == "даров, даров":
+        if username in ["sh0ck85", "ttaeart"] and text == "даров":
             bot.reply_to(message, "даров красавчик")
         elif text in ["здравствуйте", "привет"]:
             bot.reply_to(message, "Здравствуйте! Рад вас видеть.")
