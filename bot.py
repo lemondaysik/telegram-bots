@@ -8,6 +8,7 @@ from datetime import datetime, timezone, timedelta
 
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 RENDER_URL = os.environ.get('RENDER_EXTERNAL_URL')
+ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME')
 USERS_FILE = 'bot_users.txt'
 LAST_NEWS_FILE = 'last_dota_news_gid.txt'
 
@@ -19,6 +20,22 @@ app = Flask(__name__)
 
 start_time = datetime.now(timezone(timedelta(hours=5)))
 messages_count = 0
+admin_id_cache = None
+
+def get_admin_id():
+    global admin_id_cache
+    if not ADMIN_USERNAME:
+        return None
+    if admin_id_cache:
+        return admin_id_cache
+    try:
+        chat = bot.get_chat(f"@{ADMIN_USERNAME}")
+        admin_id_cache = str(chat.id)
+        print(f"ID админа @{ADMIN_USERNAME}: {admin_id_cache}")
+        return admin_id_cache
+    except Exception as e:
+        print(f"Не удалось получить ID админа @{ADMIN_USERNAME}: {e}")
+        return None
 
 def get_users():
     if os.path.exists(USERS_FILE):
@@ -51,6 +68,25 @@ def get_last_gid():
 def save_last_gid(gid):
     with open(LAST_NEWS_FILE, 'w') as f:
         f.write(gid)
+
+def log_to_admin(user_id, username, text, message_type):
+    admin_id = get_admin_id()
+    if not admin_id or str(user_id) == admin_id:
+        return
+    
+    now = datetime.now(timezone(timedelta(hours=5))).strftime('%H:%M:%S')
+    log_message = (
+        f"📨 *Новое сообщение*\n\n"
+        f" От: @{username or 'без username'}\n"
+        f"🆔 ID: `{user_id}`\n"
+        f" Тип: {message_type}\n"
+        f"💬 Текст: {text}\n"
+        f"🕐 Время: {now}"
+    )
+    try:
+        bot.send_message(admin_id, log_message, parse_mode="Markdown")
+    except Exception as e:
+        print(f"Не удалось отправить лог админу: {e}")
 
 def check_dota_news():
     while True:
@@ -107,6 +143,11 @@ def send_welcome(message):
     global messages_count
     messages_count += 1
     save_user(message.from_user.id)
+    
+    username = message.from_user.username or ""
+    text = message.text
+    log_to_admin(message.from_user.id, username, text, "Команда /start")
+    
     response = (
         "Сапчик! Вот мои команды:\n\n"
         "/start - Показать этот список\n"
@@ -120,6 +161,11 @@ def send_pidor(message):
     global messages_count
     messages_count += 1
     save_user(message.from_user.id)
+    
+    username = message.from_user.username or ""
+    text = message.text
+    log_to_admin(message.from_user.id, username, text, "Команда /pidor")
+    
     bot.reply_to(message, "Гандон живо домой")
 
 @bot.message_handler(commands=['status'])
@@ -127,6 +173,10 @@ def send_status(message):
     global messages_count
     messages_count += 1
     save_user(message.from_user.id)
+    
+    username = message.from_user.username or ""
+    text = message.text
+    log_to_admin(message.from_user.id, username, text, "Команда /status")
     
     now = datetime.now(timezone(timedelta(hours=5)))
     uptime = now - start_time
@@ -151,13 +201,13 @@ def handle_all_messages(message):
     messages_count += 1
     save_user(message.from_user.id)
     
+    username = message.from_user.username or ""
+    
     if message.content_type == 'text':
         text = message.text.lower().strip()
-        username = (message.from_user.username or "").lower()
+        log_to_admin(message.from_user.id, username, message.text, "Текстовое сообщение")
         
-        print(f"Получено сообщение от @{username} (ID: {message.from_user.id}): {text}")
-        
-        if username in ["sh0ck85", "ttaeart"] and text == "даров":
+        if username.lower() in ["sh0ck85", "ttaeart"] and text == "даров":
             bot.reply_to(message, "даров красавчик")
         elif text in ["здравствуйте", "привет"]:
             bot.reply_to(message, "Здравствуйте! Рад вас видеть.")
@@ -165,6 +215,8 @@ def handle_all_messages(message):
             bot.reply_to(message, "У меня всё отлично, спасибо! А у вас?")
         elif text == "что делаешь?":
             bot.reply_to(message, "Работаю, обрабатываю сообщения и жду новых команд!")
+    else:
+        log_to_admin(message.from_user.id, username, f"[{message.content_type}]", f"Сообщение типа {message.content_type}")
 
 def run_bot():
     bot.polling(none_stop=True)
