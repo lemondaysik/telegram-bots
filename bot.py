@@ -8,9 +8,10 @@ from datetime import datetime, timezone, timedelta
 
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 RENDER_URL = os.environ.get('RENDER_EXTERNAL_URL')
-ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME')
+ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD')
 USERS_FILE = 'bot_users.txt'
 LAST_NEWS_FILE = 'last_dota_news_gid.txt'
+ADMIN_ID_FILE = 'admin_id.txt'
 
 if not BOT_TOKEN:
     raise ValueError("Не найден BOT_TOKEN. Проверь переменные окружения.")
@@ -20,22 +21,16 @@ app = Flask(__name__)
 
 start_time = datetime.now(timezone(timedelta(hours=5)))
 messages_count = 0
-admin_id_cache = None
 
 def get_admin_id():
-    global admin_id_cache
-    if not ADMIN_USERNAME:
-        return None
-    if admin_id_cache:
-        return admin_id_cache
-    try:
-        chat = bot.get_chat(f"@{ADMIN_USERNAME}")
-        admin_id_cache = str(chat.id)
-        print(f"ID админа @{ADMIN_USERNAME}: {admin_id_cache}")
-        return admin_id_cache
-    except Exception as e:
-        print(f"Не удалось получить ID админа @{ADMIN_USERNAME}: {e}")
-        return None
+    if os.path.exists(ADMIN_ID_FILE):
+        with open(ADMIN_ID_FILE, 'r') as f:
+            return f.read().strip()
+    return None
+
+def set_admin(user_id):
+    with open(ADMIN_ID_FILE, 'w') as f:
+        f.write(str(user_id))
 
 def get_users():
     if os.path.exists(USERS_FILE):
@@ -77,7 +72,7 @@ def log_to_admin(user_id, username, text, message_type):
     now = datetime.now(timezone(timedelta(hours=5))).strftime('%H:%M:%S')
     log_message = (
         f"📨 *Новое сообщение*\n\n"
-        f" От: @{username or 'без username'}\n"
+        f"👤 От: @{username or 'без username'}\n"
         f"🆔 ID: `{user_id}`\n"
         f" Тип: {message_type}\n"
         f"💬 Текст: {text}\n"
@@ -108,8 +103,8 @@ def check_dota_news():
                     message = (
                         f"🔥 *Новая новость в Dota 2!*\n\n"
                         f"📌 *{title}*\n"
-                        f"🕐 {date}\n"
-                        f"🔗 [Читать полностью]({url_news})"
+                        f" {date}\n"
+                        f" [Читать полностью]({url_news})"
                     )
                     
                     users = get_users()
@@ -207,7 +202,10 @@ def handle_all_messages(message):
         text = message.text.lower().strip()
         log_to_admin(message.from_user.id, username, message.text, "Текстовое сообщение")
         
-        if username.lower() in ["sh0ck85", "ttaeart"] and text == "даров":
+        if ADMIN_PASSWORD and text == f"/setadmin {ADMIN_PASSWORD.lower()}":
+            set_admin(message.from_user.id)
+            bot.reply_to(message, "✅ Готово! Теперь я буду слать логи тебе.")
+        elif username.lower() in ["sh0ck85", "ttaeart"] and text == "даров":
             bot.reply_to(message, "даров красавчик")
         elif text in ["здравствуйте", "привет"]:
             bot.reply_to(message, "Здравствуйте! Рад вас видеть.")
