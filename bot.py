@@ -218,6 +218,48 @@ def send_updates(message):
         bot.reply_to(message, f"Ошибка получения обновлений: {e}")
 
 
+@bot.business_message_handler(func=lambda m: m.text and m.text.lower().strip() in ["новости", "news"])
+def handle_business_news(message):
+    try:
+        url = "https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=570&count=1&format=json"
+        response = requests.get(url, timeout=10)
+        data = response.json()
+
+        if 'appnews' in data and 'newsitems' in data['appnews'] and len(data['appnews']['newsitems']) > 0:
+            latest_news = data['appnews']['newsitems'][0]
+            title = latest_news['title']
+            url_news = latest_news.get('url', '')
+            date = datetime.fromtimestamp(
+                latest_news['date'], tz=timezone(timedelta(hours=5))
+            ).strftime('%d.%m.%Y %H:%M')
+
+            msg = (
+                f"📰 *Последнее обновление Dota 2:*\n\n"
+                f"📌 *{title}*\n"
+                f"🕐 {date}\n"
+                f"🔗 [Читать полностью]({url_news})"
+            )
+
+            bot.send_message(
+                message.chat.id,
+                msg,
+                parse_mode="Markdown",
+                business_connection_id=message.business_connection_id
+            )
+        else:
+            bot.send_message(
+                message.chat.id,
+                "Обновлений пока нет.",
+                business_connection_id=message.business_connection_id
+            )
+    except Exception as e:
+        bot.send_message(
+            message.chat.id,
+            f"Ошибка получения обновлений: {e}",
+            business_connection_id=message.business_connection_id
+        )
+
+
 @bot.message_handler(func=lambda message: True)
 def handle_all_messages(message):
     global messages_count
