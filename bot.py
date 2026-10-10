@@ -25,6 +25,29 @@ if REDIS_URL:
 start_time = datetime.now(timezone(timedelta(hours=5)))
 messages_count = 0
 
+DOTA_FACTS = [
+    "Первая версия Dota вышла в 2003 году как мод для Warcraft III.",
+    "В Dota 2 больше 127 героев, и каждый год добавляют новых. В 2026-м году еще небыло нового героя.",
+    "The International 2021 имел призовой фонд больше 40 миллионов долларов.",
+    "Название Dota расшифровывается как Defense of the Ancients.",
+    "Первым героем, добавленным в Dota 2 после релиза, был Meepo.",
+    "Самая долгая профессиональная игра в Dota 2 длилась больше 3 часов.",
+    "Слово «Ancient» в названии игры означает древних, которых нужно защищать.",
+    "Anti-Mage и Terrorblade в первой Dota были братьями-близнецами и использовали одну модель — Иллидана.",
+    "Invoker в Dota 2 носит имя Карл. В первой Dota у него было 31 заклинание.",
+    "Sven получил имя в честь датского бодибилдера Свена Одегора Карлсена.",
+    "Pangolier — прототип реального животного панголина, которое находится под угрозой исчезновения.",
+    "Никто из героев не видел настоящего лица Juggernaut — его нет даже в файлах игры.",
+    "Pudge был добавлен в DotA 30 апреля 2004 года. Изначально у него не было хука — он был некромантом.",
+    "Wraith King до 13 декабря 2013 года носил имя Skeleton King.",
+    "Согласно лору оригинальной Dota, Артас представлен двумя героями: Omniknight (светлый) и Abaddon (тёмный). Wraith King к Артасу отношения не имеет.",
+    "Самый крупный призовой фонд в истории киберспорта — The International 2021, больше 40 миллионов долларов.",
+    "Победителем TI 2021 стала команда Team Spirit, заработавшая 18,2 миллиона долларов.",
+    "Dota 2 лидирует по общему количеству разыгранных призовых среди всех киберспортивных дисциплин — более 319 миллионов долларов.",
+    "Рекорд пикового онлайна в Steam — 1,29 миллиона человек (февраль 2016 года).",
+    "Три человека(Miposhka, Collapse и Yatoro) из команды Team Spirit стали трехкратными победителями TI, забрав в награду Aegis в 2021, 2023 и 2026 году",
+]
+
 
 def get_users():
     if not r:
@@ -234,10 +257,10 @@ def handle_business_news(message):
             ).strftime('%d.%m.%Y %H:%M')
 
             msg = (
-                f"📰 *Последнее обновление Dota 2:*\n\n"
+                f"📰 *крч последняя обнова тут вот:*\n\n"
                 f"📌 *{title}*\n"
                 f"🕐 {date}\n"
-                f"🔗 [Читать полностью]({url_news})"
+                f"🔗 [тут читай все]({url_news})"
             )
 
             bot.send_message(
@@ -258,6 +281,38 @@ def handle_business_news(message):
             f"Ошибка получения обновлений: {e}",
             business_connection_id=message.business_connection_id
         )
+
+
+@bot.business_message_handler(func=lambda m: m.text and m.text.lower().strip() == "кто тебя сделал")
+def handle_business_author(message):
+    try:
+        bot.send_message(
+            message.chat.id,
+            "Меня сделал @ttaeart и его друг @sh0ck85, в разработке моего кода "
+            "участвовали эти два человека. Они продумывали каждую мою команду "
+            "и размышляли как сделать хорошего бота с относительно хорошими "
+            "функциями с тем учетом что у меня всего 0.1 CPU, а мои создатели "
+            "бедные студенты.",
+            business_connection_id=message.business_connection_id
+        )
+    except Exception as e:
+        print(f"Ошибка в handle_business_author: {e}")
+
+
+@bot.business_message_handler(func=lambda m: m.text and m.text.lower().strip() in [
+    "что по доте", "дота", "дота факт",
+    "dota fact", "dota", "about dota", "dota facts"
+])
+def handle_business_dota_fact(message):
+    try:
+        fact = random.choice(DOTA_FACTS)
+        bot.send_message(
+            message.chat.id,
+            f"Знаешь что? {fact}",
+            business_connection_id=message.business_connection_id
+        )
+    except Exception as e:
+        print(f"Ошибка в handle_business_dota_fact: {e}")
 
 
 @bot.message_handler(func=lambda message: True)
