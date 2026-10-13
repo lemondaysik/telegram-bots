@@ -2,6 +2,8 @@ import os
 import threading
 import time
 import random
+import subprocess
+import tempfile
 import requests
 import telebot
 import redis
@@ -24,6 +26,8 @@ if REDIS_URL:
 
 start_time = datetime.now(timezone(timedelta(hours=5)))
 messages_count = 0
+
+MY_PLAYLIST_URL = "https://soundcloud.com/lem-happy/sets/viperr-vse-trek?si=f6a1840b377245e98d9e885b0b0c0355&utm_source=clipboard&utm_medium=text&utm_campaign=social_sharing"
 
 DOTA_FACTS = [
     "Первая версия Dota вышла в 2003 году как мод для Warcraft III.",
@@ -163,7 +167,8 @@ def send_welcome(message):
         "/status - Статус работы бота\n"
         "/roll - Случайное число от 1 до 100\n"
         "/ping - Проверить, жив ли бот\n"
-        "/updates - Последнее обновление Dota 2"
+        "/updates - Последнее обновление Dota 2\n"
+        "/search [название] - Найти и скинуть песню из плейлиста"
     )
     bot.reply_to(message, response)
 
@@ -239,6 +244,50 @@ def send_updates(message):
             bot.reply_to(message, "Обновлений пока нет.")
     except Exception as e:
         bot.reply_to(message, f"Ошибка получения обновлений: {e}")
+
+
+@bot.message_handler(commands=['search'])
+def search_song(message):
+    global messages_count
+    messages_count += 1
+    save_user(message.from_user.id)
+
+    query = message.text.replace('/search', '').strip()
+    if not query:
+        bot.reply_to(message, "Укажи название: /search Sunday Morning")
+        return
+
+    bot.reply_to(message, "🔍 Ищу и качаю...")
+
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cmd = [
+                "yt-dlp",
+                "--default-search", "scsearch",
+                "-f", "ba",
+                "--extract-audio",
+                "--audio-format", "mp3",
+                "-o", os.path.join(tmpdir, "%(title)s.%(ext)s"),
+                f"scsearch:{query} {MY_PLAYLIST_URL}"
+            ]
+
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+
+            files = [f for f in os.listdir(tmpdir) if f.endswith('.mp3')]
+            if not files:
+                bot.reply_to(message, f"❌ Не нашёл '{query}' в плейлисте.")
+                return
+
+            filepath = os.path.join(tmpdir, files[0])
+
+            with open(filepath, 'rb') as audio:
+                bot.send_audio(message.chat.id, audio)
+
+    except subprocess.TimeoutExpired:
+        bot.reply_to(message, "❌ Превышено время ожидания.")
+    except Exception as e:
+        print(f"Ошибка: {e}")
+        bot.reply_to(message, f"❌ Ошибка: {str(e)}")
 
 
 @bot.business_message_handler(func=lambda m: m.text and m.text.lower().strip() in ["новости", "news"])
