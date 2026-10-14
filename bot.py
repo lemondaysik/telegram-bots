@@ -27,6 +27,8 @@ if REDIS_URL:
 start_time = datetime.now(timezone(timedelta(hours=5)))
 messages_count = 0
 
+MY_PLAYLIST_URL = "https://soundcloud.com/lem-happy/sets/viperr-vse-trek?si=f6a1840b377245e98d9e885b0b0c0355&utm_source=clipboard&utm_medium=text&utm_campaign=social_sharing"
+
 DOTA_FACTS = [
     "Первая версия Dota вышла в 2003 году как мод для Warcraft III.",
     "В Dota 2 больше 127 героев, и каждый год добавляют новых. В 2026-м году еще небыло нового героя.",
@@ -160,11 +162,11 @@ def send_welcome(message):
     save_user(message.from_user.id)
 
     response = (
-        "Приветик, я специализируюсь на разных задачах.\n"
-        "Одна из них это поиск музыки.\n"
-        "Так же я умею проверять обновления в игре DOTA 2 /updates.\n"
-        "Еще я специализируюсь на других командах, можете посмотреть поставив символ слеш в строку.\n"
-        "Важно знать что бот находится еще в разработке и будет дорабатываться."
+        "Приветик, я специализируюсь на разных задачах. "
+        "Одна из них это поиск музыки. "
+        "Так же я умею проверять обновления в игре DOTA 2 /updates. "
+        "Еще я специализируюсь на других командах, можете посмотреть поставив символ слеш в строку. "
+        "Важно знать что бот находится еще в разработке и будет дорабатываться"
     )
     bot.reply_to(message, response)
 
@@ -259,23 +261,19 @@ def search_song(message):
         with tempfile.TemporaryDirectory() as tmpdir:
             cmd = [
                 "yt-dlp",
-                f"ytsearch:{query}",
-                "-x",
+                "--default-search", "scsearch",
+                "-f", "ba",
+                "--extract-audio",
                 "--audio-format", "mp3",
-                "--audio-quality", "0",
                 "-o", os.path.join(tmpdir, "%(title)s.%(ext)s"),
+                f"scsearch:{query} {MY_PLAYLIST_URL}"
             ]
 
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
 
-            if result.returncode != 0:
-                print("STDERR:", result.stderr)
-                bot.reply_to(message, f"❌ Ошибка yt-dlp: {result.stderr[:200]}")
-                return
-
             files = [f for f in os.listdir(tmpdir) if f.endswith('.mp3')]
             if not files:
-                bot.reply_to(message, f"❌ Не нашёл '{query}' на YouTube.")
+                bot.reply_to(message, f"❌ Не нашёл '{query}' в плейлисте.")
                 return
 
             filepath = os.path.join(tmpdir, files[0])
