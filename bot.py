@@ -162,10 +162,10 @@ def send_welcome(message):
     save_user(message.from_user.id)
 
     response = (
-        "Приветик, я специализируюсь на разных задачах. "
-        "Одна из них это поиск музыки. "
-        "Так же я умею проверять обновления в игре DOTA 2 /updates. "
-        "Еще я специализируюсь на других командах, можете посмотреть поставив символ слеш в строку. "
+        "Приветик, я специализируюсь на разных задачах.\n"
+        "Одна из них это поиск музыки.\n"
+        "Так же я умею проверять обновления в игре DOTA 2 /updates.\n"
+        "Еще я специализируюсь на других командах, можете посмотреть поставив символ слеш в строку.\n"
         "Важно знать что бот находится еще в разработке и будет дорабатываться"
     )
     bot.reply_to(message, response)
@@ -210,6 +210,20 @@ def send_ping(message):
     messages_count += 1
     save_user(message.from_user.id)
     bot.reply_to(message, "🏓 Pong!")
+
+
+@bot.message_handler(commands=['viperrall'])
+def send_viperrall(message):
+    global messages_count
+    messages_count += 1
+    save_user(message.from_user.id)
+
+    url = "https://soundcloud.com/lem-happy/sets/viperr-vse-trek"
+    response = (
+        "🎵 *Все треки VIPERR в одном плейлисте:*\n\n"
+        f"🔗 [VIPERR — все треки]({url})"
+    )
+    bot.reply_to(message, response, parse_mode="Markdown")
 
 
 @bot.message_handler(commands=['updates'])
