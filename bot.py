@@ -220,7 +220,7 @@ def send_viperrall(message):
 
     url = "https://soundcloud.com/lem-happy/sets/viperr-vse-trek"
     response = (
-        "🎵 *Все треки VIPERR в одном плейлисте:*\n\n"
+        "🎵 *Все треки VIPERR в одном плейлисте, без блюра и даже те которых нету на Spotify и Яндекс музыке:*\n\n"
         f"🔗 [VIPERR — все треки]({url})"
     )
     bot.reply_to(message, response, parse_mode="Markdown")
