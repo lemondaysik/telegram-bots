@@ -218,7 +218,7 @@ def send_viperrall(message):
     messages_count += 1
     save_user(message.from_user.id)
 
-    url = "https://soundcloud.com/lem-happy/sets/viperr-vse-trek"
+    url = "https://soundcloud.com/lem-happy/sets/viperr-vse-trek?si=44da472403fc41308cdefd49c4f0e4e7&utm_source=clipboard&utm_medium=text&utm_campaign=social_sharing"
     response = (
         "🎵 *Все треки VIPERR в одном плейлисте, без блюра и даже те которых нету на Spotify и Яндекс музыке:*\n\n"
         f"🔗 [VIPERR — все треки]({url})"
