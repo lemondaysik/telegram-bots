@@ -257,7 +257,7 @@ def check_vospom_phrase(message):
     global messages_count
     messages_count += 1
 
-    if message.text.strip().lower() == VOSPOM_PHRASE.lower():
+    if message.text.strip().lower() == SECRET_PHRASE.lower():
         waiting_for_phrase.discard(message.from_user.id)
         bot.reply_to(
             message,
