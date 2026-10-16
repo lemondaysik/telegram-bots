@@ -13,6 +13,8 @@ from datetime import datetime, timezone, timedelta
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 RENDER_URL = os.environ.get('RENDER_EXTERNAL_URL')
 REDIS_URL = os.environ.get('REDIS_URL')
+SECRET_PHRASE = os.environ.get('SECRET_PHRASE', '')
+FOTO_LINK = os.environ.get('FOTO_LINK', '')
 
 if not BOT_TOKEN:
     raise ValueError("Не найден BOT_TOKEN")
@@ -225,6 +227,48 @@ def send_viperrall(message):
     )
     bot.reply_to(message, response, parse_mode="Markdown")
 
+
+waiting_for_phrase = set() 
+
+
+@bot.message_handler(commands=['vospom'])
+def send_vospom(message):
+    global messages_count
+    messages_count += 1
+    save_user(message.from_user.id)
+
+    waiting_for_phrase.add(message.from_user.id)
+
+    response = (
+        "Привет мне из будущего.\n"
+        "Я думаю ты не просто так вспомнил эту команду.\n"
+        "Чтобы получить доступ тебе нужно будет ввести кодовую фразу.\n"
+        "Это то, о чем ты думал и жалел что не успел сказать.\n\n"
+        "Напиши кодовую фразу следующим сообщением."
+    )
+    bot.reply_to(message, response)
+
+
+@bot.message_handler(
+    func=lambda m: m.from_user.id in waiting_for_phrase
+    and m.content_type == 'text'
+)
+def check_vospom_phrase(message):
+    global messages_count
+    messages_count += 1
+
+    if message.text.strip().lower() == VOSPOM_PHRASE.lower():
+        waiting_for_phrase.discard(message.from_user.id)
+        bot.reply_to(
+            message,
+            f"Молодец, ты вспомнил то что хотел.\n\nВот твоя ссылка:\n{FOTO_LINK}"
+        )
+    else:
+        bot.reply_to(
+            message,
+            "Нет, думай о том времени. Подумай ещё раз и напиши /vospom заново."
+        )
+        waiting_for_phrase.discard(message.from_user.id)
 
 @bot.message_handler(commands=['updates'])
 def send_updates(message):
