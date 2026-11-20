@@ -7,6 +7,7 @@ import tempfile
 import requests
 import telebot
 import redis
+from telebot import types
 from flask import Flask
 from datetime import datetime, timezone, timedelta
 
@@ -53,6 +54,14 @@ DOTA_FACTS = [
     "Рекорд пикового онлайна в Steam — 1,29 миллиона человек (февраль 2016 года).",
     "Три человека(Miposhka, Collapse и Yatoro) из команды Team Spirit стали трехкратными победителями TI, забрав в награду Aegis в 2021, 2023 и 2026 году",
 ]
+
+GAMES = {
+    "dota": (570, "Dota 2"),
+    "cs2": (730, "Counter-Strike 2"),
+    "rust": (252490, "Rust"),
+    "gta": (271590, "GTA V"),
+    "tf2": (440, "Team Fortress 2"),
+}
 
 
 def get_users():
@@ -102,47 +111,88 @@ def save_last_gid(gid):
         print(f"Redis save_last_gid error: {e}")
 
 
-def check_dota_news():
+def get_news_subs(appid):
+    if not r:
+        return []
+    try:
+        return list(r.smembers(f'news_sub:{appid}'))
+    except Exception as e:
+        print(f"Redis get_news_subs error: {e}")
+        return []
+
+
+def toggle_news_sub(user_id, appid, subscribe=True):
+    if not r:
+        return
+    try:
+        if subscribe:
+            r.sadd(f'news_sub:{appid}', str(user_id))
+        else:
+            r.srem(f'news_sub:{appid}', str(user_id))
+    except Exception as e:
+        print(f"Redis toggle_news_sub error: {e}")
+
+
+def check_all_news():
     while True:
-        try:
-            url = "https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=570&count=1&format=json"
-            response = requests.get(url, timeout=10)
-            data = response.json()
+        if not r:
+            print("Redis не настроен, авто-рассылка отключена")
+            time.sleep(15 * 60)
+            continue
 
-            if 'appnews' in data and 'newsitems' in data['appnews'] and len(data['appnews']['newsitems']) > 0:
-                latest_news = data['appnews']['newsitems'][0]
-                gid = latest_news['gid']
-                last_gid = get_last_gid()
+        for key, (appid, name) in GAMES.items():
+            try:
+                users = get_news_subs(appid)
+                if not users:
+                    continue
 
-                if gid != last_gid:
-                    title = latest_news['title']
-                    url_news = latest_news.get('url', '')
-                    date = datetime.fromtimestamp(
-                        latest_news['date'], tz=timezone(timedelta(hours=5))
-                    ).strftime('%d.%m.%Y %H:%M')
+                url = (
+                    f"https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/"
+                    f"?appid={appid}&count=1&format=json"
+                )
+                data = requests.get(url, timeout=10).json()
+                items = data.get('appnews', {}).get('newsitems', [])
+                if not items:
+                    continue
 
-                    message = (
-                        f"🔥 *Новое обновление Dota 2!*\n\n"
-                        f"📌 *{title}*\n"
-                        f"🕐 {date}\n"
-                        f"🔗 [Читать полностью]({url_news})"
-                    )
+                latest = items[0]
+                gid_key = f'last_news_gid:{appid}'
+                last_gid = r.get(gid_key) or ""
 
-                    users = get_users()
-                    sent_count = 0
-                    for user_id in users:
-                        try:
-                            bot.send_message(user_id, message, parse_mode="Markdown")
-                            sent_count += 1
-                        except Exception as e:
-                            print(f"Не удалось отправить новость {user_id}: {e}")
-                            if "bot was blocked" in str(e).lower() or "chat not found" in str(e).lower():
-                                remove_user(user_id)
+                if not last_gid:
+                    r.set(gid_key, latest['gid'])
+                    continue
 
-                    save_last_gid(gid)
-                    print(f"Отправлено обновление '{title}' {sent_count} пользователям")
-        except Exception as e:
-            print(f"Ошибка проверки обновлений: {e}")
+                if latest['gid'] == last_gid:
+                    continue
+
+                title = latest['title']
+                url_news = latest.get('url', '')
+                date = datetime.fromtimestamp(
+                    latest['date'], tz=timezone(timedelta(hours=5))
+                ).strftime('%d.%m.%Y %H:%M')
+
+                msg = (
+                    f"🔥 *Новое обновление {name}!*\n\n"
+                    f"📌 {title}\n"
+                    f"🕐 {date}\n"
+                    f"🔗 [Читать полностью]({url_news})"
+                )
+
+                sent = 0
+                for uid in users:
+                    try:
+                        bot.send_message(uid, msg, parse_mode="Markdown")
+                        sent += 1
+                    except Exception as e:
+                        print(f"Не удалось отправить {uid}: {e}")
+                        if "blocked" in str(e).lower() or "chat not found" in str(e).lower():
+                            toggle_news_sub(uid, appid, subscribe=False)
+
+                r.set(gid_key, latest['gid'])
+                print(f"[{name}] разослано {sent} юзерам")
+            except Exception as e:
+                print(f"Ошибка проверки новостей {name}: {e}")
 
         time.sleep(15 * 60)
 
@@ -228,7 +278,7 @@ def send_viperrall(message):
     bot.reply_to(message, response, parse_mode="Markdown")
 
 
-waiting_for_phrase = set() 
+waiting_for_phrase = set()
 
 
 @bot.message_handler(commands=['vospom'])
@@ -270,6 +320,7 @@ def check_vospom_phrase(message):
         )
         waiting_for_phrase.discard(message.from_user.id)
 
+
 @bot.message_handler(commands=['updates'])
 def send_updates(message):
     global messages_count
@@ -300,6 +351,96 @@ def send_updates(message):
             bot.reply_to(message, "Обновлений пока нет.")
     except Exception as e:
         bot.reply_to(message, f"Ошибка получения обновлений: {e}")
+
+
+@bot.message_handler(commands=['news'])
+def cmd_news(message):
+    global messages_count
+    messages_count += 1
+    save_user(message.from_user.id)
+
+    args = message.text.split()[1:]
+    if not args:
+        lines = ["📰 *Доступные игры:*\n"]
+        for key, (_, name) in GAMES.items():
+            lines.append(f"`{key}` — {name}")
+        lines.append("\nИспользование:")
+        lines.append("`/news dota` — подписаться")
+        lines.append("`/news off dota` — отписаться")
+        bot.reply_to(message, "\n".join(lines), parse_mode="Markdown")
+        return
+
+    off = False
+    if args[0].lower() == 'off':
+        off = True
+        args = args[1:]
+
+    if not args or args[0].lower() not in GAMES:
+        bot.reply_to(
+            message,
+            "❌ Неизвестная игра. Напиши `/news` без аргументов, чтобы увидеть список."
+        )
+        return
+
+    key = args[0].lower()
+    appid, name = GAMES[key]
+    toggle_news_sub(message.from_user.id, appid, subscribe=not off)
+
+    action = "отписал" if off else "подписал"
+    bot.reply_to(
+        message,
+        f"✅ Я {action} тебя на новости *{name}*",
+        parse_mode="Markdown"
+    )
+
+
+@bot.inline_handler(func=lambda q: True)
+def inline_handler(query):
+    results = []
+    q_text = query.query.lower().strip()
+
+    if not q_text or "факт" in q_text or "dota" in q_text:
+        fact = random.choice(DOTA_FACTS)
+        results.append(
+            types.InlineQueryResultArticle(
+                id='fact',
+                title='🎲 Случайный факт о Dota 2',
+                description=fact[:100] + ('...' if len(fact) > 100 else ''),
+                input_message_content=types.InputTextMessageContent(
+                    message_text=f"🎮 *Факт о Dota 2:*\n\n{fact}",
+                    parse_mode='Markdown'
+                )
+            )
+        )
+
+    if not q_text or "новост" in q_text or "news" in q_text:
+        results.append(
+            types.InlineQueryResultArticle(
+                id='news_dota',
+                title='📰 Новости Dota 2',
+                description='Последнее обновление из Steam',
+                input_message_content=types.InputTextMessageContent(
+                    message_text="📰 Хочешь новости Dota 2? Напиши боту /updates или /news dota"
+                )
+            )
+        )
+
+    if not results:
+        results.append(
+            types.InlineQueryResultArticle(
+                id='default',
+                title='🤖 Mini Viperr',
+                description='Напиши "факт" или "новости"',
+                input_message_content=types.InputTextMessageContent(
+                    message_text="Я бот @miniviperr_bot. Напиши мне /start, чтобы узнать что умею."
+                )
+            )
+        )
+
+    try:
+        bot.answer_inline_query(query.id, results, cache_time=5)
+    except Exception as e:
+        print(f"Ошибка инлайн-режима: {e}")
 
 
 @bot.message_handler(commands=['search'])
@@ -441,7 +582,11 @@ def handle_all_messages(message):
 
 
 def run_bot():
-    bot.infinity_polling(timeout=10, long_polling_timeout=5)
+    bot.infinity_polling(
+        timeout=20,
+        long_polling_timeout=30,
+        allowed_updates=['message', 'inline_query', 'business_message', 'callback_query']
+    )
 
 
 def keep_alive():
@@ -463,7 +608,7 @@ if __name__ == "__main__":
     ping_thread.daemon = True
     ping_thread.start()
 
-    news_thread = threading.Thread(target=check_dota_news)
+    news_thread = threading.Thread(target=check_all_news)
     news_thread.daemon = True
     news_thread.start()
 
