@@ -10,6 +10,7 @@ import redis
 from telebot import types
 from flask import Flask
 from datetime import datetime, timezone, timedelta
+from urllib.parse import quote
 
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 RENDER_URL = os.environ.get('RENDER_EXTERNAL_URL')
@@ -58,9 +59,34 @@ DOTA_FACTS = [
 GAMES = {
     "dota": (570, "Dota 2"),
     "cs2": (730, "Counter-Strike 2"),
+    "pubg": (578080, "PUBG: BATTLEGROUNDS"),
+    "apex": (1172470, "Apex Legends"),
     "rust": (252490, "Rust"),
     "gta": (271590, "GTA V"),
     "tf2": (440, "Team Fortress 2"),
+    "monsterhunter": (2246340, "Monster Hunter Wilds"),
+    "battlefield6": (2807960, "Battlefield 6"),
+    "borderlands4": (1285190, "Borderlands 4"),
+    "marvelrivals": (2767030, "Marvel Rivals"),
+    "arcraiders": (1808500, "ARC Raiders"),
+    "repo": (3241660, "R.E.P.O."),
+    "schedule1": (3164500, "Schedule I"),
+    "callofduty": (1938090, "Call of Duty"),
+    "peak": (3527290, "PEAK"),
+    "terraria": (105600, "Terraria"),
+    "stardew": (413150, "Stardew Valley"),
+    "left4dead2": (550, "Left 4 Dead 2"),
+    "baldursgate3": (1086940, "Baldur's Gate 3"),
+    "cyberpunk": (1091500, "Cyberpunk 2077"),
+    "eldenring": (1245620, "Elden Ring"),
+    "hogwarts": (990080, "Hogwarts Legacy"),
+    "palworld": (1623730, "Palworld"),
+    "blackmyth": (2358720, "Black Myth: Wukong"),
+    "hollowknight": (1030300, "Hollow Knight: Silksong"),
+    "splitfiction": (2001120, "Split Fiction"),
+    "warfrane": (230410, "Warframe"),
+    "deadbydaylight": (381210, "Dead by Daylight"),
+    "helldivers2": (553850, "Helldivers 2"),
 }
 
 
@@ -425,12 +451,52 @@ def inline_handler(query):
             )
         )
 
+    if not q_text or "мем" in q_text or "meme" in q_text:
+        try:
+            meme_data = requests.get("https://meme-api.com/gimme", timeout=10).json()
+            if meme_data.get('url'):
+                results.append(
+                    types.InlineQueryResultPhoto(
+                        id='meme',
+                        photo_url=meme_data['url'],
+                        thumbnail_url=meme_data['url'],
+                        title='😂 Случайный мем',
+                        description=meme_data.get('title', '')[:100],
+                        caption=f"😂 {meme_data.get('title', 'Мем')}\n🔗 r/{meme_data.get('subreddit', 'memes')}"
+                    )
+                )
+        except Exception as e:
+            print(f"Инлайн мем ошибка: {e}")
+
+    if "погод" in q_text or "weather" in q_text:
+        try:
+            weather = requests.get(
+                "https://api.open-meteo.com/v1/forecast"
+                "?latitude=56.85&longitude=60.61&current=temperature_2m,wind_speed_10m",
+                timeout=10
+            ).json()
+            temp = weather['current']['temperature_2m']
+            wind = weather['current']['wind_speed_10m']
+            results.append(
+                types.InlineQueryResultArticle(
+                    id='weather',
+                    title=f'🌡 Погода в Екатеринбурге: {temp}°C',
+                    description=f'Ветер: {wind} км/ч',
+                    input_message_content=types.InputTextMessageContent(
+                        message_text=f"🌡 *Погода в Екатеринбурге:* {temp}°C\n💨 Ветер: {wind} км/ч",
+                        parse_mode='Markdown'
+                    )
+                )
+            )
+        except Exception as e:
+            print(f"Инлайн погода ошибка: {e}")
+
     if not results:
         results.append(
             types.InlineQueryResultArticle(
                 id='default',
                 title='🤖 Mini Viperr',
-                description='Напиши "факт" или "новости"',
+                description='Доступно: факт, новости, мем, погода',
                 input_message_content=types.InputTextMessageContent(
                     message_text="Я бот @miniviperr_bot. Напиши мне /start, чтобы узнать что умею."
                 )
@@ -441,6 +507,67 @@ def inline_handler(query):
         bot.answer_inline_query(query.id, results, cache_time=5)
     except Exception as e:
         print(f"Ошибка инлайн-режима: {e}")
+
+
+@bot.message_handler(commands=['short'])
+def cmd_short(message):
+    global messages_count
+    messages_count += 1
+    save_user(message.from_user.id)
+
+    args = message.text.replace('/short', '', 1).strip()
+    if not args or not args.startswith(('http://', 'https://')):
+        bot.reply_to(message, "❌ Кинь ссылку: `/short https://example.com/very/long/url`", parse_mode="Markdown")
+        return
+
+    try:
+        response = requests.get(
+            "https://clck.ru/--",
+            params={"url": args},
+            timeout=10
+        )
+        if response.ok:
+            short_url = response.text.strip()
+            bot.reply_to(
+                message,
+                f"🔗 *Короткая ссылка:*\n`{short_url}`",
+                parse_mode="Markdown"
+            )
+        else:
+            bot.reply_to(message, "❌ Сервис не смог сократить ссылку.")
+    except Exception as e:
+        print(f"Ошибка /short: {e}")
+        bot.reply_to(message, "❌ Ошибка при сокращении. Попробуй позже.")
+
+
+@bot.message_handler(commands=['qr'])
+def cmd_qr(message):
+    global messages_count
+    messages_count += 1
+    save_user(message.from_user.id)
+
+    text = message.text.replace('/qr', '', 1).strip()
+    if not text:
+        bot.reply_to(
+            message,
+            "❌ Что закодировать? Напиши: `/qr https://example.com` или `/qr привет`",
+            parse_mode="Markdown"
+        )
+        return
+
+    try:
+        encoded = quote(text)
+        qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=400x400&data={encoded}"
+
+        bot.send_photo(
+            message.chat.id,
+            qr_url,
+            caption=f"📱 QR-код для:\n`{text[:200]}`",
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        print(f"Ошибка /qr: {e}")
+        bot.reply_to(message, "❌ Не удалось сгенерировать QR-код. Попробуй позже.")
 
 
 @bot.message_handler(commands=['search'])
